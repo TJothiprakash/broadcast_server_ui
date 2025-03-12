@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Group Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f8ff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .chat-container {
+            width: 400px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #007acc;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .chat-messages {
+            height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            background: #e6f2ff;
+        }
+
+        .message {
+            max-width: 70%;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 5px 0;
+            display: inline-block;
+            word-wrap: break-word;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #007acc;
+            font-style: italic;
+            margin: 5px 0;
+        }
+
+        .sent {
+            background: #007acc;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
+        }
+
+        .received {
+            background: #ffffff;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
+            box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .chat-input {
+            display: flex;
+            border-top: 1px solid #ddd;
+            padding: 10px;
+            background: white;
+        }
+
+        #message {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-left: 10px;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background: #005f99;
+        }
+    </style>
+</head>
+<body>
+<div class="chat-container">
+    <div class="chat-header">Group Chat</div>
+    <div class="chat-messages" id="messages"></div>
+    <div class="chat-input">
+        <input type="text" id="message" placeholder="Type a message...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+    let username;
+    let socket;
+    let connectedUsers = new Set(); // Track connected users
+
+    function askForUsername() {
+        while (true) {
+            username = prompt("Enter your name:");
+            if (!username) {
+                alert("Name cannot be empty.");
+                continue;
+            }
+            if (connectedUsers.has(username)) {
+                alert("Name already taken. Please enter another name.");
+            } else {
+                connectedUsers.add(username);
+                break;
+            }
+        }
+        startWebSocket();
+    }
+
+    function startWebSocket() {
+        socket = new WebSocket("ws://localhost:8080/broadcast");
+
+        socket.onopen = () => {
+            console.log("Connected to WebSocket server.");
+            addSystemMessage(`Connected as: ${username}`);
+            socket.send(JSON.stringify({ type: "join", user: username }));
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === "message") {
+                addMessage(`${data.user}: ${data.text}`, "received");
+            } else if (data.type === "join") {
+                addSystemMessage(`${data.user} joined the chat.`);
+            } else if (data.type === "leave") {
+                addSystemMessage(`${data.user} left the chat.`);
+            }
+        };
+
+        socket.onclose = () => {
+            console.log("Disconnected from server.");
+            addSystemMessage("Disconnected from server.");
+        };
+    }
+
+    function sendMessage() {
+        const messageBox = document.getElementById("message");
+        const message = messageBox.value.trim();
+        if (message !== "") {
+            socket.send(JSON.stringify({ type: "message", user: username, text: message }));
+            addMessage(`You: ${message}`, "sent");
+            messageBox.value = ""; // Clear input
+        }
+    }
+
+    function addMessage(text, type) {
+        const messageContainer = document.getElementById("messages");
+        const msgElement = document.createElement("div");
+        msgElement.classList.add("message", type);
+        msgElement.textContent = text;
+        messageContainer.appendChild(msgElement);
+        messageContainer.scrollTop = messageContainer.scrollHeight; // Auto-scroll
+    }
+
+    function addSystemMessage(text) {
+        const messageContainer = document.getElementById("messages");
+        const msgElement = document.createElement("div");
+        msgElement.classList.add("system-message");
+        msgElement.textContent = text;
+        messageContainer.appendChild(msgElement);
+        messageContainer.scrollTop = messageContainer.scrollHeight; // Auto-scroll
+    }
+
+    // Send message when "Enter" key is pressed
+    document.getElementById("message").addEventListener("keypress", function(event) {
+        if (event.key === "Enter") {
+            sendMessage();
+        }
+    });
+
+    askForUsername();
+</script>
+</body>
+</html>
