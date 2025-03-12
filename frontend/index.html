@@ -121,26 +121,19 @@
 <script>
     let username;
     let socket;
-    let connectedUsers = new Set(); // Track connected users
 
     function askForUsername() {
-        while (true) {
-            username = prompt("Enter your name:");
-            if (!username) {
-                alert("Name cannot be empty.");
-                continue;
-            }
-            if (connectedUsers.has(username)) {
-                alert("Name already taken. Please enter another name.");
-            } else {
-                connectedUsers.add(username);
-                break;
-            }
+        username = prompt("Enter your name:");
+        if (!username || username.trim() === "") {
+            alert("Name cannot be empty.");
+            askForUsername();
+        } else {
+            startWebSocket();
         }
-        startWebSocket();
     }
 
     function startWebSocket() {
+        // Use WebSocket Secure (wss) for Render deployment
         socket = new WebSocket("wss://websocker-broadcast-server.onrender.com/broadcast");
 
         socket.onopen = () => {
@@ -150,13 +143,19 @@
         };
 
         socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === "message") {
-                addMessage(`${data.user}: ${data.text}`, "received");
-            } else if (data.type === "join") {
-                addSystemMessage(`${data.user} joined the chat.`);
-            } else if (data.type === "leave") {
-                addSystemMessage(`${data.user} left the chat.`);
+            console.log("Raw WebSocket message:", event.data);
+
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === "message") {
+                    addMessage(`${data.user}: ${data.text}`, "received");
+                } else if (data.type === "join") {
+                    addSystemMessage(`${data.user} joined the chat.`);
+                } else if (data.type === "leave") {
+                    addSystemMessage(`${data.user} left the chat.`);
+                }
+            } catch (error) {
+                console.warn("Non-JSON WebSocket message received:", event.data);
             }
         };
 
@@ -172,7 +171,7 @@
         if (message !== "") {
             socket.send(JSON.stringify({ type: "message", user: username, text: message }));
             addMessage(`You: ${message}`, "sent");
-            messageBox.value = ""; // Clear input
+            messageBox.value = "";
         }
     }
 
@@ -182,7 +181,7 @@
         msgElement.classList.add("message", type);
         msgElement.textContent = text;
         messageContainer.appendChild(msgElement);
-        messageContainer.scrollTop = messageContainer.scrollHeight; // Auto-scroll
+        messageContainer.scrollTop = messageContainer.scrollHeight;
     }
 
     function addSystemMessage(text) {
@@ -191,10 +190,9 @@
         msgElement.classList.add("system-message");
         msgElement.textContent = text;
         messageContainer.appendChild(msgElement);
-        messageContainer.scrollTop = messageContainer.scrollHeight; // Auto-scroll
+        messageContainer.scrollTop = messageContainer.scrollHeight;
     }
 
-    // Send message when "Enter" key is pressed
     document.getElementById("message").addEventListener("keypress", function(event) {
         if (event.key === "Enter") {
             sendMessage();
